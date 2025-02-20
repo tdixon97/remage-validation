@@ -3,6 +3,7 @@ from pathlib import Path
 import time
 import numpy as np
 import shutil
+import yaml
 
 
 def clear_directory(directory):
@@ -184,35 +185,40 @@ for generator, config in generators.items():
                 "size": size,
             }
 
-    """
-
     # add a production cut in germanium
-    for sens_prod_cut in np.linspace(5,145,8):
-        times , size = run_sim(
-                            generator_name = generator,
-                            name = "sens_prod_cuts",
-                            val = int(sens_prod_cut),
-                            step_limits = "",
-                            prod_cuts = f"/RMG/Processes/SensitiveProductionCut {sens_prod_cut} um",
-                            generator=config,
-                            register_lar = False)
-        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {"time":f"{times:.1f}","size":size}
+    for sens_prod_cut in np.linspace(5, 145, 8):
+        times, size = run_sim(
+            generator_name=generator,
+            name="sens_prod_cuts",
+            val=int(sens_prod_cut),
+            step_limits="",
+            prod_cuts=f"/RMG/Processes/SensitiveProductionCut {sens_prod_cut} um",
+            generator=config,
+            register_lar=False,
+        )
+        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
+            "time": f"{times:.1f}",
+            "size": size,
+        }
 
     # default prod cut (outside)
-    for def_prod_cut in np.linspace(10,490,5):
-        for lar in [True,False]:
+    for def_prod_cut in np.linspace(10, 490, 5):
+        for lar in [True, False]:
             name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
 
-            times , size = run_sim(
-                                generator_name = generator,
-                                name = name,
-                                val = int(def_prod_cut),
-                                step_limits = "",
-                                prod_cuts =f"/RMG/Processes/DefaultProductionCut {def_prod_cut} um",
-                                generator=config,
-                                register_lar = lar)
-            profile[generator][name][str(def_prod_cut)] = {"time":f"{times:.1f}","size":size}
+            times, size = run_sim(
+                generator_name=generator,
+                name=name,
+                val=int(def_prod_cut),
+                step_limits="",
+                prod_cuts=f"/RMG/Processes/DefaultProductionCut {def_prod_cut} um",
+                generator=config,
+                register_lar=lar,
+            )
+            profile[generator][name][str(def_prod_cut)] = {
+                "time": f"{times:.1f}",
+                "size": size,
+            }
 
-with open("profile.yaml", "w") as f:
+with open("out/profile/profile.yaml", "w") as f:
     yaml.dump(profile, f, default_flow_style=False)
-    """

@@ -2,6 +2,7 @@ from pathlib import Path
 import time
 import numpy as np
 import shutil
+import yaml
 import dbetto
 from reboost.build_glm import build_glm
 from reboost.build_hit import build_hit
@@ -32,7 +33,7 @@ def clear_directory(directory):
             shutil.rmtree(item)
 
 
-def run_reboost(generator_name, name, val, reboost_config="hit_config.yaml"):
+def run_reboost(generator_name, name, val, reboost_config="config/hit_config.yaml"):
     path = f"{generator_name}/{name}/max_{int(val)}/"
 
     # directories
@@ -105,30 +106,31 @@ for generator in generators:
             "time": f"{times:.3f}",
             "size": size,
         }
-    """
 
     # add a production cut in germanium
-    for sens_prod_cut in np.linspace(5,145,8):
+    for sens_prod_cut in np.linspace(5, 145, 8):
+        times, size = run_reboost(
+            generator_name=generator, name="sens_prod_cuts", val=sens_prod_cut
+        )
 
-        times , size = run_reboost(
-                           generator_name = generator,
-                            name = "sens_prod_cuts",
-                            val = sens_prod_cut)
-
-        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {"time":f"{times:.3f}","size":size}
+        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
+            "time": f"{times:.3f}",
+            "size": size,
+        }
 
     # default prod cut (outside)
-    for def_prod_cut in np.linspace(10,490,5):
-        for lar in [True,False]:
+    for def_prod_cut in np.linspace(10, 490, 5):
+        for lar in [True, False]:
             name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
 
-            times , size = run_reboost(
-                           generator_name = generator,
-                           name = name,
-                           val = def_prod_cut)
+            times, size = run_reboost(
+                generator_name=generator, name=name, val=def_prod_cut
+            )
 
-            profile[generator][name][str(def_prod_cut)] = {"time":f"{times:.3f}","size":size}
+            profile[generator][name][str(def_prod_cut)] = {
+                "time": f"{times:.3f}",
+                "size": size,
+            }
 
-with open("profile_hit.yaml", "w") as f:
+with open("out/profile/profile_hit.yaml", "w") as f:
     yaml.dump(profile, f, default_flow_style=False)
-"""
