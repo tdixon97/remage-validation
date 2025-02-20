@@ -1,0 +1,42 @@
+
+objects:
+  geometry: pyg4ometry.gdml.Reader(ARGS.gdml).getRegistry()
+
+processing_groups:
+  - name: geds
+
+    detector_mapping:
+      - output: germanium
+
+    detector_objects:
+      phyvol: OBJECTS.geometry.physicalVolumeDict['germanium']
+    
+    outputs:
+      - t0
+      - first_evtid 
+      - truth_energy
+      - active_energy
+      - smeared_energy
+      - r90
+      - max_z
+
+    hit_table_layout: reboost.shape.group.group_by_time(STEPS,window = 10)
+
+    operations:
+      t0: ak.fill_none(ak.firsts(HITS.time, axis=-1), np.nan)
+
+      first_evtid: ak.fill_none(ak.firsts(HITS.evtid, axis=-1), np.nan)
+
+      truth_energy: ak.sum(HITS.edep, axis=-1)
+
+      activeness: reboost.math.functions.piecewise_linear_activeness(HITS.dist_to_surf*1000, 
+                                   fccd=1, 
+                                   tl=0.5)
+
+      active_energy: ak.sum(HITS.edep*HITS.activeness, axis=-1)
+      
+      smeared_energy: reboost.math.stats.gaussian_sample(HITS.active_energy,1)
+
+      r90: reboost.hpge.psd.r90(HITS.edep, HITS.xloc,HITS.yloc,HITS.zloc)
+      
+      max_z: ak.fill_none(1000*ak.max(HITS.zloc,axis=-1),np.nan)+5

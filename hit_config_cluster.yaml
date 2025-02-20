@@ -1,0 +1,46 @@
+
+objects:
+  geometry: pyg4ometry.gdml.Reader(ARGS.gdml).getRegistry()
+
+processing_groups:
+  - name: geds
+
+    detector_mapping:
+      - output: det001
+
+    detector_objects:
+      phyvol: OBJECTS.geometry.physicalVolumeDict[OBJECTS.user_pars[DETECTOR].name]
+      det_pars: OBJECTS.user_pars[DETECTOR]
+    
+    outputs:
+      - t0
+      - first_evtid 
+      - truth_energy
+      - active_energy
+      - smeared_energy
+
+    hit_table_layout: reboost.shape.group.group_by_time(STEPS,window = 10)
+
+    operations:
+
+      cluster_lengths: reboost.shape.cluster.cluster_by_step_length(
+          HITS.trackid, HITS.xloc, HITS.yloc, HITS.zloc,HITS.dist_to_surf, 
+          threshold=ARGS.bulk_threshold, threshold_surf=ARGS.bulk_threshold, surf_cut=ARGS.surf_cut)
+        
+      cluster_edep: reboost.shape.cluster.apply_cluster_to_field()
+
+      t0: ak.fill_none(ak.firsts(HITS.time, axis=-1), np.nan)
+
+      first_evtid: ak.fill_none(ak.firsts(HITS.evtid, axis=-1), np.nan)
+
+      truth_energy: ak.sum(HITS.edep, axis=-1)
+
+      activeness: reboost.math.functions.piecewise_linear_activeness(HITS.dist_to_surf*1000, 
+                                   fccd=1, 
+                                   tl=0.5)
+
+      active_energy: ak.sum(HITS.edep*HITS.activeness, axis=-1)
+      
+      smeared_energy: reboost.math.stats.gaussian_sample(HITS.active_energy,1)
+
+      r90: reboost.hpge.psd.r90(HITS.edep, HITS.xloc,HITS.yloc,HITS.zloc)

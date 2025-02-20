@@ -1,0 +1,16 @@
+/RMG/Output/NtuplePerDetector false
+/RMG/Geometry/RegisterDetector Germanium germanium 001
+$REGISTER_LAR
+
+$STEP_LIMITS_COMMAND
+$PROD_CUTS_COMMAND
+
+/run/initialize
+
+$STEP_POINT
+
+/RMG/Output/Germanium/StoreTrackID true
+
+$GENERATOR
+
+/run/beamOn 200000
