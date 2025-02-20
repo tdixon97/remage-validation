@@ -4,7 +4,7 @@ det001:
   reso_in_sigma: 1.1
   name: BEGe
 det002:
-  fccd_in_mm: 2.2 
+  fccd_in_mm: 2.2
   tl_in_mm: 1.04
   reso_in_sigma: 2.32
   name: Coax
