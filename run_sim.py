@@ -76,7 +76,7 @@ def run_sim(
     )
 
     start = time.time()
-    result = subprocess.run(
+    subprocess.run(
         f"remage {macro_directory / macro_file} -g gdml/geometry.gdml -o {stp_directory}/out.lh5 -w  ",
         shell=True,
     )
