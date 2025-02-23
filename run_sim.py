@@ -78,7 +78,7 @@ def run_sim(
 
     start = time.time()
     subprocess.run(
-        f"remage {macro_directory / macro_file} -g gdml/geometry.gdml -o {stp_directory}/out.lh5 -w  ",
+        f"remage {macro_directory / macro_file} -g gdml/geometry.gdml -o {stp_directory}/out.lh5 -w -t 8  ",
         shell=True,
     )
     end = time.time()
@@ -89,7 +89,12 @@ def get_folder_size(path):
     return f"{(sum(f.stat().st_size for f in Path(path).rglob('*') if f.is_file()) / (1024**2)):.2f}"
 
 
+do_gamma = False
+do_cuts = False
+
 generators = {}
+cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+
 
 # define some generator commands
 generators["beta_surf"] = """
@@ -110,23 +115,24 @@ generators["beta_bulk"] = """
 /gps/energy 1000 keV
 """
 
-generators["gamma_bulk"] = """
-/RMG/Generator/Confine Volume
-/RMG/Generator/Confinement/Physical/AddVolume germanium
-/RMG/Generator/Select GPS
-/gps/particle gamma
-/gps/ang/type iso
-/gps/energy 1000 keV
-"""
+if do_gamma:
+    generators["gamma_bulk"] = """
+    /RMG/Generator/Confine Volume
+    /RMG/Generator/Confinement/Physical/AddVolume germanium
+    /RMG/Generator/Select GPS
+    /gps/particle gamma
+    /gps/ang/type iso
+    /gps/energy 1000 keV
+    """
 
-generators["gamma_external"] = """
-/RMG/Generator/Confine Volume
-/RMG/Generator/Confinement/Physical/AddVolume Source
-/RMG/Generator/Select GPS
-/gps/particle e-
-/gps/ang/type iso
-/gps/energy 1000 keV
-"""
+    generators["gamma_external"] = """
+    /RMG/Generator/Confine Volume
+    /RMG/Generator/Confinement/Physical/AddVolume Source
+    /RMG/Generator/Select GPS
+    /gps/particle e-
+    /gps/ang/type iso
+    /gps/energy 1000 keV
+    """
 
 
 # with and without the argon table
@@ -147,7 +153,7 @@ for generator, config in generators.items():
             generator_name=generator,
             name=name,
             val="0",
-            step_limits="",
+            step_points="/RMG/Output/Germanium/StepPositionMode Both",
             prod_cuts="",
             generator=config,
             register_lar=lar,
@@ -155,70 +161,57 @@ for generator, config in generators.items():
 
         profile[generator][name] = {"time": f"{times:.1f}", "size": size}
 
-    # add step limits to Ge
-
-    for step_point in ["PreStep", "PostStep", "Average"]:
+    for step_limits in cuts:
         times, size = run_sim(
             generator_name=generator,
-            name="step_point",
-            val=step_point,
-            step_limits=f"/RMG/Output/Germanium/StepPositionMode/{step_point}",
+            name="step_limits",
+            val=step_limits,
+            step_limits=f"/RMG/Geometry/SetMaxStepSize {step_limits} um germanium",
             prod_cuts="",
+            step_points="/RMG/Output/Germanium/StepPositionMode Both",
             generator=config,
             register_lar=False,
         )
-        # profile[generator]["step_limits"][str(step_limits)] = {"time":f"{times:.1f}","size":size}
-
-        for step_limits in np.linspace(10, 190, 7):
-            times, size = run_sim(
-                generator_name=generator,
-                name=f"step_limits_{step_point}",
-                val=int(step_limits),
-                step_limits=f"/RMG/Geometry/SetMaxStepSize {step_limits} um germanium",
-                prod_cuts="",
-                step_points=f"/RMG/Output/Germanium/StepPositionMode {step_point}",
-                generator=config,
-                register_lar=False,
-            )
-            profile[generator]["step_limits"][str(step_limits)] = {
-                "time": f"{times:.1f}",
-                "size": size,
-            }
-
-    # add a production cut in germanium
-    for sens_prod_cut in np.linspace(5, 145, 8):
-        times, size = run_sim(
-            generator_name=generator,
-            name="sens_prod_cuts",
-            val=int(sens_prod_cut),
-            step_limits="",
-            prod_cuts=f"/RMG/Processes/SensitiveProductionCut {sens_prod_cut} um",
-            generator=config,
-            register_lar=False,
-        )
-        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
+        profile[generator]["step_limits"][str(step_limits)] = {
             "time": f"{times:.1f}",
             "size": size,
         }
 
-    # default prod cut (outside)
-    for def_prod_cut in np.linspace(10, 490, 5):
-        for lar in [True, False]:
-            name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
-
+    # add a production cut in germanium
+    if do_cuts:
+        for sens_prod_cut in np.linspace(5, 145, 8):
             times, size = run_sim(
                 generator_name=generator,
-                name=name,
-                val=int(def_prod_cut),
+                name="sens_prod_cuts",
+                val=int(sens_prod_cut),
                 step_limits="",
-                prod_cuts=f"/RMG/Processes/DefaultProductionCut {def_prod_cut} um",
+                prod_cuts=f"/RMG/Processes/SensitiveProductionCut {sens_prod_cut} um",
                 generator=config,
-                register_lar=lar,
+                register_lar=False,
             )
-            profile[generator][name][str(def_prod_cut)] = {
+            profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
                 "time": f"{times:.1f}",
                 "size": size,
             }
+
+        # default prod cut (outside)
+        for def_prod_cut in np.linspace(10, 490, 5):
+            for lar in [True, False]:
+                name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
+
+                times, size = run_sim(
+                    generator_name=generator,
+                    name=name,
+                    val=int(def_prod_cut),
+                    step_limits="",
+                    prod_cuts=f"/RMG/Processes/DefaultProductionCut {def_prod_cut} um",
+                    generator=config,
+                    register_lar=lar,
+                )
+                profile[generator][name][str(def_prod_cut)] = {
+                    "time": f"{times:.1f}",
+                    "size": size,
+                }
 
 with open("out/profile/profile.yaml", "w") as f:
     yaml.dump(profile, f, default_flow_style=False)
