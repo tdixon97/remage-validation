@@ -48,6 +48,7 @@ def run_sim(
     step_limits="",
     prod_cuts="",
     step_points="",
+    proc = "",
     generator="",
     register_lar=False,
 ):
@@ -58,6 +59,8 @@ def run_sim(
     stp_directory = Path(f"out/{dir_string}/stp/")
     clear_directory(stp_directory)
     macro_directory = Path(f"macros/{dir_string}/")
+    clear_directory(macro_directory)
+
     lar_command = (
         "/RMG/Geometry/RegisterDetector Scintillator LAr 002" if register_lar else ""
     )
@@ -70,6 +73,7 @@ def run_sim(
         "$PROD_CUTS_COMMAND": prod_cuts,
         "$GENERATOR": generator,
         "$STEP_POINT": step_points,
+        "$PROC":proc,
         "$REGISTER_LAR": lar_command,
     }
     replace_lines(
@@ -78,7 +82,7 @@ def run_sim(
 
     start = time.time()
     subprocess.run(
-        f"remage {macro_directory / macro_file} -g gdml/geometry.gdml -o {stp_directory}/out.lh5 -w -t 8  ",
+        f"remage {macro_directory / macro_file} -g gdml/geometry.gdml -o {stp_directory}/out.lh5 -w -t 128  ",
         shell=True,
     )
     end = time.time()
@@ -91,29 +95,45 @@ def get_folder_size(path):
 
 do_gamma = False
 do_cuts = False
+do_bulk = True
+do_k42 = True
+do_surf = True
 
 generators = {}
-cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500,1000]
 
 
 # define some generator commands
-generators["beta_surf"] = """
-/RMG/Generator/Select GPS
-/gps/position 0 0 -5 mm
-/gps/particle e-
-/gps/energy 1000 keV
-/gps/direction 0 0 1
-"""
+if (do_surf):
+    generators["beta_surf"] = """
+    /RMG/Generator/Select GPS
+    /gps/position 0 0 -5 mm
+    /gps/particle e-
+    /gps/energy 1000 keV
+    /gps/direction 0 0 1
+    """
 
+if (do_bulk):
+    generators["beta_bulk"] = """
+    /RMG/Generator/Confine Volume
+    /RMG/Generator/Confinement/Physical/AddVolume germanium
+    /RMG/Generator/Select GPS
+    /gps/particle e-
+    /gps/ang/type iso
+    /gps/energy 1000 keV
+    """
 
-generators["beta_bulk"] = """
-/RMG/Generator/Confine Volume
-/RMG/Generator/Confinement/Physical/AddVolume germanium
-/RMG/Generator/Select GPS
-/gps/particle e-
-/gps/ang/type iso
-/gps/energy 1000 keV
-"""
+if (do_k42):
+    generators["k42_surf"] = """
+    /RMG/Generator/Confine Volume
+    /RMG/Generator/Confinement/SampleOnSurface true
+    /RMG/Generator/Confinement/SurfaceSampleMaxIntersections 6
+    /RMG/Generator/Confinement/Physical/AddVolume germanium
+    /RMG/Generator/Select GPS
+    /gps/particle ion
+    /gps/energy 0 eV
+    /gps/ion 19 42 # 42-K
+    """
 
 if do_gamma:
     generators["gamma_bulk"] = """
@@ -138,44 +158,49 @@ if do_gamma:
 # with and without the argon table
 profile = {}
 for generator, config in generators.items():
-    profile[generator] = {
-        "def_lar_on": {},
-        "def_lar_off": {},
-        "step_limits": {},
-        "sens_prod_cuts": {},
-        "def_prod_cuts_lar_on": {},
-        "def_prod_cuts_lar_off": {},
-    }
-    for lar in [True, False]:
-        name = "def_lar_on" if lar else "def_lar_off"
+    profile[generator] = {}
 
-        times, size = run_sim(
-            generator_name=generator,
-            name=name,
-            val="0",
-            step_points="/RMG/Output/Germanium/StepPositionMode Both",
-            prod_cuts="",
-            generator=config,
-            register_lar=lar,
-        )
+    for proc in ["eBrem","msc","all"]:
+        ps = f"/process/inactivate {proc}" if proc!="all" else ""
+        for lar in [True, False]:
+            name =f"def_lar_on_{proc}" if lar else f"def_lar_off_{proc}"
 
-        profile[generator][name] = {"time": f"{times:.1f}", "size": size}
+            times, size = run_sim(
+                generator_name=generator,
+                name=name,
+                val="0",
+                step_points="/RMG/Output/Germanium/StepPositionMode Both",
+                prod_cuts="",
+                proc =ps,
+                generator=config,
+                register_lar=lar,
+            )
 
-    for step_limits in cuts:
-        times, size = run_sim(
-            generator_name=generator,
-            name="step_limits",
-            val=step_limits,
-            step_limits=f"/RMG/Geometry/SetMaxStepSize {step_limits} um germanium",
-            prod_cuts="",
-            step_points="/RMG/Output/Germanium/StepPositionMode Both",
-            generator=config,
-            register_lar=False,
-        )
-        profile[generator]["step_limits"][str(step_limits)] = {
-            "time": f"{times:.1f}",
-            "size": size,
-        }
+            profile[generator][name] = {"time": f"{times:.1f}", "size": size}
+        
+        
+        profile[generator][f"step_limits_{proc}"] = {}
+
+        # loop over step limits
+        for step_limits in cuts:
+
+            times, size = run_sim(
+                generator_name=generator,
+                name=f"step_limits_{proc}",
+                val=step_limits,
+                step_limits=f"/RMG/Geometry/SetMaxStepSize {step_limits} um germanium",
+                prod_cuts="",
+                proc = ps,
+                step_points="/RMG/Output/Germanium/StepPositionMode Both",
+                generator=config,
+                register_lar=False,
+            )
+            profile[generator][f"step_limits_{proc}"][str(step_limits)] = {
+                "time": f"{times:.1f}",
+                "size": size,
+            }
+
+
 
     # add a production cut in germanium
     if do_cuts:

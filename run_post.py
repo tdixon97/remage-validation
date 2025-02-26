@@ -6,9 +6,11 @@ import yaml
 import dbetto
 from reboost.build_glm import build_glm
 from reboost.build_hit import build_hit
+from reboost.utils import get_file_list
+
 import colorlog
 import logging
-
+import concurrent.futures
 log = logging.getLogger(__name__)
 
 handler = colorlog.StreamHandler()
@@ -33,8 +35,8 @@ def clear_directory(directory):
             shutil.rmtree(item)
 
 
-def run_reboost(generator_name, name, val, reboost_config="config/hit_config.yaml"):
-    path = f"{generator_name}/{name}/max_{int(val)}/"
+def run_reboost(generator_name, name, val, reboost_config="config/hit_config.yaml",threads = 128):
+    path = f"{generator_name}/{name}/max_{val}/"
 
     # directories
     stp_directory = Path(f"out/{path}/stp/")
@@ -48,23 +50,31 @@ def run_reboost(generator_name, name, val, reboost_config="config/hit_config.yam
     # make the directories
     hit_directory.mkdir(parents=True, exist_ok=True)
     glm_directory.mkdir(parents=True, exist_ok=True)
+    
+    t = time.time()
+
+    glm_files = get_file_list(f"{glm_directory}/out.lh5", threads=threads)
+    stp_files = get_file_list(f"{stp_directory}/out.lh5", threads=threads)
+    hit_files = get_file_list(f"{hit_directory}/out.lh5", threads = threads)
+
 
     build_glm(
-        glm_files=f"{glm_directory}/out.lh5",
-        stp_files=f"{stp_directory}/out.lh5",
+        glm_files=glm_files,
+        stp_files=stp_files,
         id_name="evtid",
     )
 
     args = dbetto.AttrsDict({"gdml": "gdml/geometry.gdml"})
-    t = time.time()
     _, _ = build_hit(
         reboost_config,
         args=args,
-        stp_files=f"{stp_directory}/out.lh5",
-        glm_files=f"{glm_directory}/out.lh5",
-        hit_files=f"{hit_directory}/out.lh5",
+        stp_files=stp_files,
+        glm_files=glm_files,
+        hit_files=hit_files,
         buffer=10_000_000,
     )
+
+
     return time.time() - t, get_folder_size(hit_directory)
 
 
@@ -72,65 +82,67 @@ def get_folder_size(path):
     return f"{(sum(f.stat().st_size for f in Path(path).rglob('*') if f.is_file()) / (1024**2)):.3f}"
 
 
-generators = ["beta_surf", "beta_bulk", "gamma_bulk", "gamma_external"]
+generators = ["beta_surf", "beta_bulk","k42_surf"] #, "gamma_bulk", "gamma_external"]
+cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500,1000]
+
+do_cuts = False
 
 # with and without the argon table
 profile = {}
+
 for generator in generators:
-    profile[generator] = {
-        "def_lar_on": {},
-        "def_lar_off": {},
-        "step_limits": {},
-        "sens_prod_cuts": {},
-        "def_prod_cuts_lar_on": {},
-        "def_prod_cuts_lar_off": {},
-    }
+    for proc in ["eBrem","msc","all"]:
 
-    for lar in [True, False]:
-        name = "def_lar_on" if lar else "def_lar_off"
+        profile[generator] = {}
 
-        times, size = run_reboost(generator_name=generator, name=name, val=0)
+        for lar in [True, False]:
+            name = f"def_lar_on_{proc}" if lar else f"def_lar_off_{proc}"
 
-        profile[generator][name] = {"time": f"{times:.3f}", "size": size}
+            times, size = run_reboost(generator_name=generator, name=name, val=0)
 
-    # add step limits to Ge
-    for step_limits in np.linspace(10, 190, 7):
-        for step_point in ["PreStep", "PostStep", "Average"]:
+            profile[generator][name] = {"time": f"{times:.3f}", "size": size}
+
+        # add step limits to G
+        profile[generator][f"step_limits_{proc}"] = {}
+        
+        for step_limits in cuts:
+        
             times, size = run_reboost(
                 generator_name=generator,
-                name=f"step_limits_{step_point}",
+                name=f"step_limits_{proc}",
                 val=step_limits,
             )
 
-        profile[generator]["step_limits"][str(step_limits)] = {
-            "time": f"{times:.3f}",
-            "size": size,
-        }
-
-    # add a production cut in germanium
-    for sens_prod_cut in np.linspace(5, 145, 8):
-        times, size = run_reboost(
-            generator_name=generator, name="sens_prod_cuts", val=sens_prod_cut
-        )
-
-        profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
-            "time": f"{times:.3f}",
-            "size": size,
-        }
-
-    # default prod cut (outside)
-    for def_prod_cut in np.linspace(10, 490, 5):
-        for lar in [True, False]:
-            name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
-
-            times, size = run_reboost(
-                generator_name=generator, name=name, val=def_prod_cut
-            )
-
-            profile[generator][name][str(def_prod_cut)] = {
+            profile[generator][f"step_limits_{proc}"][str(step_limits)] = {
                 "time": f"{times:.3f}",
                 "size": size,
             }
+
+        # add a production cut in germanium
+        if (do_cuts):
+            for sens_prod_cut in np.linspace(5, 145, 8):
+                times, size = run_reboost(
+                    generator_name=generator, name="sens_prod_cuts", val=sens_prod_cut
+                )
+
+                profile[generator]["sens_prod_cuts"][str(sens_prod_cut)] = {
+                    "time": f"{times:.3f}",
+                    "size": size,
+                }
+
+            # default prod cut (outside)
+            for def_prod_cut in np.linspace(10, 490, 5):
+                for lar in [True, False]:
+                    name = "def_prod_cuts_lar_on" if lar else "def_prod_cuts_lar_off"
+
+                    times, size = run_reboost(
+                        generator_name=generator, name=name, val=def_prod_cut
+                    )
+
+                    profile[generator][name][str(def_prod_cut)] = {
+                        "time": f"{times:.3f}",
+                        "size": size,
+                    }
 
 with open("out/profile/profile_hit.yaml", "w") as f:
     yaml.dump(profile, f, default_flow_style=False)

@@ -7,10 +7,11 @@ $PROD_CUTS_COMMAND
 
 /run/initialize
 
+$PROC
 $STEP_POINT
 
 /RMG/Output/Germanium/StoreTrackID true
 
 $GENERATOR
 
-/run/beamOn 200000
+/run/beamOn 100000
