@@ -106,53 +106,53 @@ cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500,1000]
 # define some generator commands
 if (do_surf):
     generators["beta_surf"] = """
-    /RMG/Generator/Select GPS
-    /gps/position 0 0 -5 mm
-    /gps/particle e-
-    /gps/energy 1000 keV
-    /gps/direction 0 0 1
-    """
+/RMG/Generator/Select GPS
+/gps/position 0 0 -5 mm
+/gps/particle e-
+/gps/energy 1000 keV
+/gps/direction 0 0 1
+"""
 
 if (do_bulk):
     generators["beta_bulk"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/Physical/AddVolume germanium
-    /RMG/Generator/Select GPS
-    /gps/particle e-
-    /gps/ang/type iso
-    /gps/energy 1000 keV
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/Physical/AddVolume germanium
+/RMG/Generator/Select GPS
+/gps/particle e-
+/gps/ang/type iso
+/gps/energy 1000 keV
+"""
 
 if (do_k42):
     generators["k42_surf"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/SampleOnSurface true
-    /RMG/Generator/Confinement/SurfaceSampleMaxIntersections 6
-    /RMG/Generator/Confinement/Physical/AddVolume germanium
-    /RMG/Generator/Select GPS
-    /gps/particle ion
-    /gps/energy 0 eV
-    /gps/ion 19 42 # 42-K
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/SampleOnSurface true
+/RMG/Generator/Confinement/SurfaceSampleMaxIntersections 6
+/RMG/Generator/Confinement/Physical/AddVolume germanium
+/RMG/Generator/Select GPS
+/gps/particle ion
+/gps/energy 0 eV
+/gps/ion 19 42 # 42-K
+"""
 
 if do_gamma:
     generators["gamma_bulk"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/Physical/AddVolume germanium
-    /RMG/Generator/Select GPS
-    /gps/particle gamma
-    /gps/ang/type iso
-    /gps/energy 1000 keV
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/Physical/AddVolume germanium
+/RMG/Generator/Select GPS
+/gps/particle gamma
+/gps/ang/type iso
+/gps/energy 1000 keV
+"""
 
     generators["gamma_external"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/Physical/AddVolume Source
-    /RMG/Generator/Select GPS
-    /gps/particle e-
-    /gps/ang/type iso
-    /gps/energy 1000 keV
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/Physical/AddVolume Source
+/RMG/Generator/Select GPS
+/gps/particle e-
+/gps/ang/type iso
+/gps/energy 1000 keV
+"""
 
 
 # with and without the argon table
@@ -160,7 +160,7 @@ profile = {}
 for generator, config in generators.items():
     profile[generator] = {}
 
-    for proc in ["eBrem","msc","all"]:
+    for proc in ["all"]:
         ps = f"/process/inactivate {proc}" if proc!="all" else ""
         for lar in [True, False]:
             name =f"def_lar_on_{proc}" if lar else f"def_lar_off_{proc}"
@@ -238,5 +238,5 @@ for generator, config in generators.items():
                     "size": size,
                 }
 
-with open("out/profile/profile.yaml", "w") as f:
+with open("out/profile/profile_fccd.yaml", "w") as f:
     yaml.dump(profile, f, default_flow_style=False)

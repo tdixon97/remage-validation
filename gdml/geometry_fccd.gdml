@@ -32,7 +32,7 @@
 	<solids>
 		<orb name="world" r="150" lunit="mm"/>
 		<tube name="germanium" rmin="0" rmax="10" z="10" startphi="0" deltaphi="6.283185307179586" lunit="mm" aunit="rad"/>
-		<tube name="Al_s" rmin="0" rmax="10" z="0.2" startphi="0" deltaphi="6.283185307179586" lunit="mm" aunit="rad"/>
+		<tube name="Al_s" rmin="0" rmax="10" z="0.5" startphi="0" deltaphi="6.283185307179586" lunit="mm" aunit="rad"/>
 		<tube name="Source_s" rmin="0" rmax="1" z="1" startphi="0" deltaphi="6.283185307179586" lunit="mm" aunit="rad"/>
 	</solids>
 	<structure>
@@ -58,7 +58,7 @@
 			</physvol>
 			<physvol name="Shield">
 				<volumeref ref="Shield_L"/>
-				<position name="Shield_pos" x="0.000000000000000" y="0.000000000000000" z="0.600000000000000" unit="cm"/>
+				<position name="Shield_pos" x="0.000000000000000" y="0.000000000000000" z="0.800000000000000" unit="cm"/>
 			</physvol>
 			<physvol name="Source">
 				<volumeref ref="Source_L"/>

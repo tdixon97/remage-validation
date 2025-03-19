@@ -82,7 +82,7 @@ def run_sim(
 
     start = time.time()
     subprocess.run(
-        f"remage {macro_directory / macro_file} -g gdml/geometry_fccd.gdml -o {stp_directory}/out.lh5 -w -t 128  ",
+        f"remage {macro_directory / macro_file} -g gdml/geometry_fccd.gdml -o {stp_directory}/out.lh5 -w -t 8  ",
         shell=True,
     )
     end = time.time()
@@ -95,34 +95,35 @@ def get_folder_size(path):
 
 do_gamma = False
 do_cuts = False
-do_bulk = True
-do_k42 = True
-do_surf = True
+
+do_am = True
+do_ba = True
 
 generators = {}
-cuts = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500,1000]
+cuts = [5, 10, 20, 50, 100, 200, 500,1000]
 
 
 # define some generator commands
 
 if (do_am):
     generators["am241"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/Physical/AddVolume Source
-    /RMG/Generator/Select GPS
-    /gps/particle ion
-    /gps/energy 0 eV
-    /gps/ion 95 241 
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/Physical/AddVolume Source
+/RMG/Generator/Select GPS
+/gps/particle ion
+/gps/energy 0 eV
+/gps/ion 95 241 
+/process/had/rdm/nucleusLimits 241 241 95 95 
+"""
 if (do_ba):
     generators["ba133"] = """
-    /RMG/Generator/Confine Volume
-    /RMG/Generator/Confinement/Physical/AddVolume Source
-    /RMG/Generator/Select GPS
-    /gps/particle ion
-    /gps/energy 0 eV
-    /gps/ion 77 133
-    """
+/RMG/Generator/Confine Volume
+/RMG/Generator/Confinement/Physical/AddVolume Source
+/RMG/Generator/Select GPS
+/gps/particle ion
+/gps/energy 0 eV
+/gps/ion 56 133
+"""
     
 
 # with and without the argon table
@@ -130,7 +131,7 @@ profile = {}
 for generator, config in generators.items():
     profile[generator] = {}
 
-    for proc in ["eBrem","msc","all"]:
+    for proc in ["all"]:
         ps = f"/process/inactivate {proc}" if proc!="all" else ""
         for lar in [False]:
             name =f"def_lar_on_{proc}" if lar else f"def_lar_off_{proc}"
