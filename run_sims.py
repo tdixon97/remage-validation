@@ -21,11 +21,12 @@ def run_sims(ranges: list, name: str, field: str):
         }
 
         # edit the kwargs
-        if field == "cuts":
+
+        if field == "cuts" and cut is not None:
             kwargs["sensitive_cut"] = cut
-        elif field == "steps":
+        elif field == "steps" and cut is not None:
             kwargs["step_limit"] = cut
-        elif field == "cluster":
+        elif field == "cluster" and cut is not None:
             kwargs["cluster_dist"] = cut
 
         reps = utils.get_replacements(gen, **kwargs)
@@ -39,6 +40,6 @@ def run_sims(ranges: list, name: str, field: str):
 
 gen = utils.get_generator(name="beta")
 
-run_sims([5, 10, 20, 50, 100, 200], "beta_prod_cuts", "cuts")
-run_sims([5, 10, 20, 50, 100, 200], "beta_step_limits", "steps")
-run_sims([5, 10, 20, 50, 100, 200], "beta_cluster_dist", "cluster")
+run_sims([None, 5, 10, 20, 50, 100, 200], "beta_prod_cuts", "cuts")
+run_sims([None, 5, 10, 20, 50, 100, 200], "beta_step_limits", "steps")
+run_sims([None, 5, 10, 20, 50, 100, 200], "beta_cluster_dist", "cluster")

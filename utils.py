@@ -2,7 +2,188 @@ from __future__ import annotations
 import os
 import shutil
 import yaml
+import numpy as np
+import awkward as ak
+from lgdo import lh5
+import copy
 from pathlib import Path
+from scipy.stats import beta, poisson, norm
+import hist
+
+
+def get_cylinder_dist(r: np.ndarray, z: np.ndarray, radius: float, height: float):
+    """Get distance to surface for a cylinder."""
+    a = np.array((height / 2.0 - z).to_numpy())
+    b = np.array((z + height / 2).to_numpy())
+    c = np.array((radius - r).to_numpy())
+
+    return np.minimum(np.minimum(a, b), c)
+
+
+def get_lh5(
+    generator: str,
+    name: str,
+    val: float,
+    dist_low: float | None = None,
+    dist_high: float | None = None,
+):
+    """Get the data from an lh5 file.
+
+    Parameters
+    ----------
+    generator
+        name of the generator
+    name
+        name of the simulation
+    val
+        value of the cut
+    dist_low
+        low cut on distance to surface for the vertices
+    dist_high
+        high cut on distance to surface
+    """
+    height = 40  # mm
+    radius = 40  # mm
+
+    path = f"{generator}_{name}_{val}/"
+    hit_directory = Path(f"out/{path}/hit/")
+    files = Path(hit_directory).glob()
+
+    data = None
+    verts = None
+    for file in files:
+        data_tmp = lh5.read_as("germanium/hit", f"{hit_directory}/{file}", "ak")
+        verts_tmp = lh5.read_as("vertices/hit", f"{hit_directory}/{file}", "ak")
+        verts_tmp["dist_to_surf"] = get_cylinder_dist(
+            1000 * verts_tmp.rloc, 1000 * verts_tmp.zloc, radius, height
+        )
+        if data is None:
+            data = ak.concatenate((data, data_tmp))
+            verts = ak.concatenate((verts, verts_tmp))
+        else:
+            data = data_tmp
+            verts = verts_tmp
+
+    if dist_low is not None:
+        n_sel = ak.sum(
+            ak.flatten(
+                (verts["dist_to_surf"] > dist_low) & (verts["dist_to_surf"] < dist_high)
+            )
+        )
+    else:
+        n_sel = len(verts)
+
+    hit_ids = np.searchsorted(verts.first_evtid, data.first_evtid)
+    verts = verts[hit_ids]
+
+    data["vert_rloc"] = 1000 * ak.flatten(verts.rloc)
+    data["vert_zloc"] = 1000 * ak.flatten(verts.zloc)
+
+    data["vert_dist_to_surf"] = get_cylinder_dist(
+        data.vert_rloc, data.vert_zloc, radius, height
+    )
+
+    if dist_low is not None:
+        data = data[
+            (data["vert_dist_to_surf"] > dist_low)
+            & (data["vert_dist_to_surf"] < dist_high)
+        ]
+
+    return data, n_sel
+
+
+def get_binomial_interval(npass: float, n: float):
+    """Extract an interval of a binomial distribution.
+
+    Parameters
+    ----------
+    npass
+        number of events passing
+    n
+        total number of events
+
+    Returns
+    -------
+    tuple of (err_low,err_high)
+    """
+
+    eff = npass / n
+    quantiles = beta.ppf([0.16, 0.84], npass + 1, n - npass + 1)
+    err_low = eff - quantiles[0]
+    err_high = quantiles[1] - eff
+    if err_high <= 0:
+        quantiles = beta.ppf([1 - 0.68, 1], npass + 1, n - npass + 1)
+        err_low = eff - quantiles[0]
+        err_high = quantiles[1] - eff
+    elif err_low <= 0:
+        quantiles = beta.ppf([0, 0.68], npass + 1, n - npass + 1)
+        err_low = eff - quantiles[0]
+        err_high = quantiles[1] - eff
+    return err_low, err_high
+
+
+def norm_histo(histo: hist.Hist, bins: list):
+    """Normalise a histogram."""
+    c, bc = histo.to_numpy()
+    bc = bc[:-1]
+    counts = copy.deepcopy(c)
+    for b in range(histo.size - 2):
+        histo[b] *= 1 / np.diff(bins)[b]
+    return counts, bc
+
+
+def normalized_poisson_residual(mu1: float, mu2: float) -> np.ndarray:
+    """Compute a normalised poisson residual between two poisson distributed
+    random variables.
+
+    This is based on computing the distribution of the difference N1-N2
+    and finding the tail probability i.e. the fraction of the
+    distribution < 0 or > 0. I.e. the residual represents the number of
+    sigma the difference N1-N2 is from 0.
+
+    In the case of high count rates the distribution is approximated as
+    Gaussian.
+    """
+
+    if mu1 == 0 or mu2 == 0:
+        return 0
+
+    if mu1 > 10 and mu2 > 10:
+        return (mu1 - mu2) / np.sqrt(mu1 + mu2)
+
+    N = 100_000
+    samples = poisson.rvs(mu=float(mu1), size=N) - poisson.rvs(mu=float(mu2), size=N)
+    counts = sum(samples > 0)
+
+    if counts < N / 2.0:
+        sign = -1
+        prob = counts / N
+    else:
+        sign = 1
+        counts = N - counts
+        prob = (counts) / N
+    if prob == 0:
+        prob = 1e-5
+    return sign * norm.ppf(1 - prob)
+
+
+def get_hist(ak_obj: ak.Array, field: str, bins_tmp: list):
+    """Get the histogram."""
+    ak_obj = ak_obj[ak_obj[field] != 0]
+    ak_obj[field] = ak_obj[field]
+
+    return hist.Hist(hist.axis.Variable(bins_tmp)).fill(ak_obj[field].to_numpy() + 1e-4)
+
+
+def get_bins(list_range: list, list_binning: list, e_max: float = 1000):
+    """Extract a variable binning."""
+
+    # Define bin ranges
+    bin_list = []
+    for r, b in zip(list_range, list_binning):
+        bin_list.append(np.arange(r[0] * e_max / 1000, r[1] * e_max / 1000, b))
+
+    return np.unique(np.concatenate(bin_list))
 
 
 def get_folder_size(path: str):
