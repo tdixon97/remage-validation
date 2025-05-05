@@ -1,0 +1,31 @@
+beta:
+  - /RMG/Generator/Select GPS
+  - /gps/particle e-
+  - /gps/ang/type iso
+  - /gps/energy {ENERGY} keV
+
+gamma:
+  - /RMG/Generator/Select GPS
+  - /gps/particle gamma
+  - /gps/ang/type iso
+  - /gps/energy {ENERGY} keV
+
+th228:
+  - /RMG/Generator/Select GPS
+  - /gps/particle ion
+  - /gps/energy 0 eV
+  - /gps/ion 88 224
+  - /process/had/rdm/nucleusLimits 208 224 81 88
+
+ra226:
+  - /RMG/Generator/Select GPS
+  - /gps/particle ion
+  - /gps/energy 0 eV
+  - /gps/ion 86 222
+  - /process/had/rdm/nucleusLimits 214 222 82 86
+
+ar39:
+  - /RMG/Generator/Select GPS
+  - /gps/particle ion
+  - /gps/energy 0 eV
+  - /gps/ion 18 39

@@ -1,0 +1,19 @@
+/RMG/Geometry/RegisterDetector Germanium germanium 001
+$REGISTER_LAR
+
+$STEP_LIMITS_COMMAND
+
+$PROD_CUTS_COMMAND
+
+/run/initialize
+$PRECLUSTER
+
+# other settings
+
+/RMG/Output/Germanium/StoreTrackID true
+
+$CONFINE
+
+$GENERATOR
+
+/run/beamOn {N}
