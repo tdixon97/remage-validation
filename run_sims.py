@@ -31,10 +31,10 @@ def run_sims(ranges: list, name: str, field: str):
         reps = utils.get_replacements(gen, **kwargs)
 
         run.run_simulation(
-            reps, f"out/{name}_{cut}/", {"ENERGY": 1000, "N": 1000000}, threads=8
+            reps, f"out/{name}_{cut}/", {"ENERGY": 1000, "N": 100000}, threads=8
         )
 
-        post_proc.run_reboost(f"out/{name}{cut}/", threads=8)
+        post_proc.run_reboost(f"out/{name}_{cut}/", threads=8)
 
 
 gen = utils.get_generator(name="beta")
