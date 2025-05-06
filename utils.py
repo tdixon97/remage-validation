@@ -47,22 +47,27 @@ def get_lh5(
 
     path = f"{generator}_{name}_{val}/"
     hit_directory = Path(f"out/{path}/hit/")
-    files = Path(hit_directory).glob()
+    files = hit_directory.glob("*.lh5")
 
     data = None
     verts = None
+
     for file in files:
-        data_tmp = lh5.read_as("germanium/hit", f"{hit_directory}/{file}", "ak")
-        verts_tmp = lh5.read_as("vertices/hit", f"{hit_directory}/{file}", "ak")
+        data_tmp = lh5.read_as("det001/hit", f"{file}", "ak")
+        verts_tmp = lh5.read_as("vertices/hit", f"{file}", "ak")
+
         verts_tmp["dist_to_surf"] = get_cylinder_dist(
             1000 * verts_tmp.rloc, 1000 * verts_tmp.zloc, radius, height
         )
-        if data is None:
+        hit_ids = np.array(np.searchsorted(verts_tmp.first_evtid, data_tmp.first_evtid))
+        verts_tmp = verts_tmp[hit_ids]
+
+        if data is not None:
             data = ak.concatenate((data, data_tmp))
             verts = ak.concatenate((verts, verts_tmp))
         else:
-            data = data_tmp
-            verts = verts_tmp
+            data = copy.deepcopy(data_tmp)
+            verts = copy.deepcopy(verts_tmp)
 
     if dist_low is not None:
         n_sel = ak.sum(
@@ -72,9 +77,6 @@ def get_lh5(
         )
     else:
         n_sel = len(verts)
-
-    hit_ids = np.searchsorted(verts.first_evtid, data.first_evtid)
-    verts = verts[hit_ids]
 
     data["vert_rloc"] = 1000 * ak.flatten(verts.rloc)
     data["vert_zloc"] = 1000 * ak.flatten(verts.zloc)
@@ -125,11 +127,13 @@ def get_binomial_interval(npass: float, n: float):
 def norm_histo(histo: hist.Hist, bins: list):
     """Normalise a histogram."""
     c, bc = histo.to_numpy()
-    bc = bc[:-1]
+    left = bc
+    centers = []
     counts = copy.deepcopy(c)
     for b in range(histo.size - 2):
         histo[b] *= 1 / np.diff(bins)[b]
-    return counts, bc
+        centers.append(left[b] + np.diff(bins)[b] / 2.0)
+    return counts, centers
 
 
 def normalized_poisson_residual(mu1: float, mu2: float) -> np.ndarray:
@@ -277,7 +281,9 @@ def get_replacements(
     }
 
 
-def setup_folder(base_folder: str):
+def setup_folder(
+    base_folder: str, subfolders: list = ["stp", "hit", "glm", "log", "stats", "config"]
+):
     """Make a folder and the subfolders, clearing it if it already exists.
 
     Parameters
@@ -294,7 +300,6 @@ def setup_folder(base_folder: str):
     os.makedirs(base_folder)
 
     # Create the subfolders
-    subfolders = ["stp", "hit", "glm", "log", "stats", "config"]
     for sub in subfolders:
         os.makedirs(os.path.join(base_folder, sub))
 

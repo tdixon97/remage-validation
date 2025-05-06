@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import numpy as np
 from matplotlib import pyplot as plt
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import tol_colors as tc
 import awkward as ak
+import dbetto
 import utils
 
 plt.rcParams["lines.linewidth"] = 1
@@ -45,7 +45,7 @@ def plot_residual(ax, label, bin_centers: list, def_counts: list, low_counts: li
     )
 
 
-def make_axes(figsize: tuple, range_zoom: tuple | None):
+def make_axes(figsize: tuple):
     """Make the axes for plotting."""
     fig, axs = plt.subplots(
         2,
@@ -54,24 +54,11 @@ def make_axes(figsize: tuple, range_zoom: tuple | None):
         figsize=figsize,
         sharex=True,
     )
-    ax = axs[0]
-
-    if range_zoom is not None:
-        ax_inset = inset_axes(
-            ax,
-            width="100%",
-            height="100%",
-            bbox_to_anchor=(0.3, 0.5, 0.6, 0.45),
-            bbox_transform=ax.transAxes,
-        )
-        axes_list = [axs, ax_inset]
-    else:
-        axes_list = [axs]
-    return axes_list
+    return [axs]
 
 
 def get_axis(a):
-    return a[0] if isinstance(a, list) else a
+    return a[0] if not isinstance(a, plt.Axes) else a
 
 
 def plot(
@@ -82,7 +69,6 @@ def plot(
     field: str,
     scale: str = "log",
     ylims: tuple | None = None,
-    range_zoom: tuple = (990, 1010),
     eff_range: tuple = (999, 1001),
     dist_range: tuple | None = None,
     doeff: bool = False,
@@ -140,7 +126,7 @@ def plot(
     results["def"] = {"n": n_sel, "eff": eff}
 
     # add a zoom
-    axes_list = make_axes(figsize, range_zoom)
+    axes_list = make_axes(figsize)
 
     # plot
     for a in axes_list:
@@ -179,7 +165,7 @@ def plot(
 
             ax = axes_list[0][0]
             if legend:
-                a.legend(loc="upper right")
+                ax.legend(loc="upper right")
                 ax.legend(ncol=1)
                 ax.get_legend().set_title(name)
 
@@ -194,13 +180,6 @@ def plot(
         results[val]["eff"] = ak.sum(
             (ak_obj[field] > eff_range[0]) & (ak_obj[field] < eff_range[1])
         )
-
-        # style
-        if range_zoom is not None:
-            axes_list[1].set_yscale(scale)
-            axes_list[1].set_xlabel(" ")
-            axes_list[1].set_ylabel(" ")
-            axes_list[1].set_xlim(*range_zoom)
 
         plt.tight_layout()
 
@@ -220,8 +199,8 @@ def plot(
         if not doeff:
             return
 
-        # plot the efficiency
-        plot_efficiency(label, name, save_eff_name, results, eff_range)
+    # plot the efficiency
+    plot_efficiency(label, name, save_eff_name, results, eff_range)
 
 
 def plot_efficiency(
@@ -275,3 +254,57 @@ def plot_efficiency(
 
     plt.tight_layout()
     plt.savefig(save_eff_name)
+
+
+def plot_performance(
+    generator: str, cuts: list, name: str = "step_limits", name_plot: str | None = None
+):
+    size = []
+    vals = []
+    times = []
+
+    for cut in sorted(cuts):
+        prof = dbetto.AttrsDict(
+            dbetto.utils.load_dict(f"out/{generator}_{name}_{cut}/stats/stats.yaml")
+        )
+        if cut is not None:
+            size.append(float(prof.size))
+            times.append(float(prof.time))
+            vals.append(float(cut))
+        else:
+            size_def = float(prof.size)
+            time_def = float(prof.time)
+
+    # sort
+    idx = np.argsort(vals)
+    size = np.array(size)[idx]
+    vals = np.array(vals)[idx]
+    times = np.array(times)[idx]
+
+    # Create figure and first axis
+    fig, ax1 = plt.subplots()
+
+    # Plot the first dataset (sine wave)
+    ax1.plot(vals, times, "b-*")
+    ax1.set_xlabel(f"{name} [um]")
+    ax1.set_ylabel("time [s]", color="b")
+    ax1.tick_params(axis="y", labelcolor="b")
+    ax1.axhline(y=time_def, color="b", linestyle="--")
+    # Create a second y-axis sharing the same x-axis
+    ax2 = ax1.twinx()
+
+    # Plot the second dataset (cosine wave)
+    ax2.plot(vals, size, "r--.")
+
+    ax2.set_ylabel("Size [MB]", color="r")
+
+    ax2.tick_params(axis="y", labelcolor="r")
+    ax2.axhline(y=size_def, color="r", linestyle="--")
+
+    ax2.set_xscale("linear")
+
+    # Show the plot
+    fig.tight_layout()  # Adjust layout
+
+    if name_plot is not None:
+        plt.savefig(name_plot)
